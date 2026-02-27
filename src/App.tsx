@@ -20,38 +20,83 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { User, Tournament, NewsItem, LeaderboardEntry } from './types';
+import { User, Tournament, NewsItem, LeaderboardEntry, Team } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [view, setView] = useState<'home' | 'tournaments' | 'news' | 'leaderboard' | 'profile' | 'login' | 'register' | 'tournament-detail'>('home');
+  const [userTeam, setUserTeam] = useState<Team | null>(null);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [view, setView] = useState<'home' | 'tournaments' | 'news' | 'leaderboard' | 'teams' | 'profile' | 'login' | 'register' | 'tournament-detail'>('home');
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(false);
   const [authForm, setAuthForm] = useState({ email: '', password: '', username: '', ff_id: '' });
+  const [teamForm, setTeamForm] = useState({ name: '', tag: '', logo_url: '' });
   const [error, setError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
     const savedUser = localStorage.getItem('ff_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      fetchUserTeam(parsedUser.id);
+    }
   }, []);
 
   const fetchData = async () => {
     try {
-      const [tRes, nRes, lRes] = await Promise.all([
+      const [tRes, nRes, lRes, teamsRes] = await Promise.all([
         fetch('/api/tournaments'),
         fetch('/api/news'),
-        fetch('/api/leaderboard')
+        fetch('/api/leaderboard'),
+        fetch('/api/teams')
       ]);
       setTournaments(await tRes.json());
       setNews(await nRes.json());
       setLeaderboard(await lRes.json());
+      setAllTeams(await teamsRes.json());
     } catch (err) {
       console.error("Failed to fetch data", err);
+    }
+  };
+
+  const fetchUserTeam = async (userId: number) => {
+    try {
+      const res = await fetch(`/api/user/${userId}/team`);
+      const data = await res.json();
+      setUserTeam(data);
+    } catch (err) {
+      console.error("Failed to fetch user team", err);
+    }
+  };
+
+  const handleCreateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...teamForm, leader_id: user.id })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUserTeam(data);
+        fetchData(); // Refresh all teams list
+        alert("Team created successfully!");
+      } else {
+        setError(data.error);
+      }
+    } catch (err) {
+      setError("Failed to create team");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -209,7 +254,7 @@ export default function App() {
             <NavItem icon={Trophy} label="Tournaments" id="tournaments" />
             <NavItem icon={Newspaper} label="Official News" id="news" />
             <NavItem icon={BarChart3} label="Leaderboard" id="leaderboard" />
-            <NavItem icon={Shield} label="Teams" id="home" />
+            <NavItem icon={Shield} label="Teams" id="teams" />
           </nav>
 
           {user && (
@@ -338,6 +383,100 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {tournaments.map(renderTournamentCard)}
+                </div>
+              </motion.div>
+            )}
+
+            {view === 'teams' && (
+              <motion.div key="teams" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <h2 className="font-display text-3xl font-black italic uppercase">eSports Teams</h2>
+                  {!userTeam && user && (
+                    <button onClick={() => {}} className="btn-primary py-2 px-6 text-sm">CREATE TEAM</button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Create Team Form or User Team Info */}
+                  <div className="lg:col-span-1">
+                    {userTeam ? (
+                      <div className="gamer-card p-8 text-center">
+                        <div className="w-24 h-24 rounded-2xl bg-white/5 border border-white/10 mx-auto mb-6 overflow-hidden flex items-center justify-center">
+                          {userTeam.logo_url ? (
+                            <img src={userTeam.logo_url} className="w-full h-full object-cover" alt={userTeam.name} />
+                          ) : (
+                            <Shield size={48} className="text-primary" />
+                          )}
+                        </div>
+                        <h3 className="font-display text-2xl font-bold mb-1">{userTeam.name}</h3>
+                        <p className="text-primary font-display font-bold uppercase tracking-widest text-sm">[{userTeam.tag}]</p>
+                        <div className="mt-6 pt-6 border-t border-white/5">
+                          <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest mb-4">Team Leader</p>
+                          <div className="flex items-center justify-center gap-2">
+                            <UserIcon size={14} className="text-white/60" />
+                            <span className="text-sm font-bold">{user?.username}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : user ? (
+                      <div className="gamer-card p-8">
+                        <h3 className="font-display text-xl font-bold italic uppercase mb-6">Create Your Team</h3>
+                        <form onSubmit={handleCreateTeam} className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Team Name</label>
+                            <input type="text" required className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-sm" value={teamForm.name} onChange={e => setTeamForm({...teamForm, name: e.target.value})} />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Team Tag (3-4 chars)</label>
+                            <input type="text" required maxLength={4} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-sm" value={teamForm.tag} onChange={e => setTeamForm({...teamForm, tag: e.target.value})} />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Logo URL</label>
+                            <input type="url" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-primary outline-none text-sm" value={teamForm.logo_url} onChange={e => setTeamForm({...teamForm, logo_url: e.target.value})} />
+                          </div>
+                          {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
+                          <button type="submit" disabled={loading} className="btn-primary w-full py-3 mt-2">
+                            {loading ? 'CREATING...' : 'REGISTER TEAM'}
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="gamer-card p-8 text-center">
+                        <Shield size={48} className="text-white/10 mx-auto mb-4" />
+                        <p className="text-sm text-white/40 mb-6">Login to create and manage your own eSports team.</p>
+                        <button onClick={() => setView('login')} className="btn-primary w-full py-3">LOGIN NOW</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* All Teams List */}
+                  <div className="lg:col-span-2">
+                    <div className="gamer-card p-8 min-h-[400px]">
+                      <h3 className="font-display text-xl font-bold italic uppercase mb-8">Registered Teams</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {allTeams.length > 0 ? allTeams.map(team => (
+                          <div key={team.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-dark flex items-center justify-center overflow-hidden">
+                              {team.logo_url ? (
+                                <img src={team.logo_url} className="w-full h-full object-cover" alt={team.name} />
+                              ) : (
+                                <Shield size={20} className="text-white/20" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{team.name}</p>
+                              <p className="text-[10px] text-primary font-display font-bold">[{team.tag}]</p>
+                            </div>
+                          </div>
+                        )) : (
+                          <div className="col-span-full flex flex-col items-center justify-center h-64 text-white/10">
+                            <Shield size={64} className="mb-4 opacity-5" />
+                            <p className="text-xs font-bold uppercase tracking-widest">No teams registered yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}

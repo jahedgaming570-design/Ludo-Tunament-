@@ -36,3 +36,11 @@ export interface LeaderboardEntry {
   total_kills: number;
   total_earnings: number;
 }
+
+export interface Team {
+  id: number;
+  name: string;
+  tag: string;
+  leader_id: number;
+  logo_url: string;
+}

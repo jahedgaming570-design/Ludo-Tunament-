@@ -118,6 +118,26 @@ async function startServer() {
     res.json(leaderboard);
   });
 
+  app.get("/api/teams", (req, res) => {
+    const teams = db.prepare("SELECT * FROM teams").all();
+    res.json(teams);
+  });
+
+  app.get("/api/user/:id/team", (req, res) => {
+    const team = db.prepare("SELECT * FROM teams WHERE leader_id = ?").get(req.params.id);
+    res.json(team || null);
+  });
+
+  app.post("/api/teams", (req, res) => {
+    const { name, tag, leader_id, logo_url } = req.body;
+    try {
+      const info = db.prepare("INSERT INTO teams (name, tag, leader_id, logo_url) VALUES (?, ?, ?, ?)").run(name, tag, leader_id, logo_url);
+      res.json({ id: info.lastInsertRowid, name, tag, leader_id, logo_url });
+    } catch (e) {
+      res.status(400).json({ error: "Team name already exists" });
+    }
+  });
+
   app.get("/api/tournaments/:id", (req, res) => {
     const tournament = db.prepare("SELECT * FROM tournaments WHERE id = ?").get(req.params.id);
     if (!tournament) return res.status(404).json({ error: "Tournament not found" });
